@@ -1,0 +1,14 @@
+# Laufzeitdaten der Installation (Zugangsdaten, Uploads, Logs) gehören nie ins Repository
+/storage/*
+!/storage/.htaccess
+
+# Entwicklungs- und Testreste
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.zip
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,28 @@
+# Hydrantenverwaltung - Apache-Konfiguration
+# Voraussetzung: mod_rewrite und AllowOverride (bei fast allen Webspaces vorhanden).
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Hinweis: Die Weiterleitung auf HTTPS erledigt die Anwendung selbst (Einstellung force_https
+  # in storage/config.php). Das vermeidet Weiterleitungsschleifen hinter Proxys.
+
+  # Interne Ordner nie ausliefern
+  RewriteRule ^(src|storage)(/|$) - [F,L]
+
+  # Alles, was keine echte Datei oder kein Ordner ist, geht an index.php
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [L]
+</IfModule>
+
+# Dokumentation und SQL nicht ausliefern
+<FilesMatch "\.(md|sql|lock|log)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+  </IfModule>
+</FilesMatch>
