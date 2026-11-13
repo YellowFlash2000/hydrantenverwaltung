@@ -125,7 +125,7 @@ $showPos = Settings::bool('show_position');
     <div class="card">
       <h2>Bilder (optional)</h2>
       <div class="form-group">
-        <input type="file" name="bilder[]" accept="image/jpeg,image/png,image/webp" multiple data-resize>
+        <input type="file" name="bilder[]" accept="image/jpeg,image/png,image/webp" multiple data-resize data-marker>
         <p class="hint">Mehrere Bilder möglich (höchstens 10 auf einmal). Sie werden vor dem Hochladen verkleinert.</p>
       </div>
     </div>
@@ -138,18 +138,35 @@ $showPos = Settings::bool('show_position');
 </form>
 
 <?php if (!$isNew): ?>
-  <div class="card">
+  <div class="card" id="bilder">
     <h2>Bilder</h2>
     <?php if (!$images): ?>
       <p class="hint">Es sind noch keine Bilder vorhanden.</p>
     <?php else: ?>
       <ul class="image-admin">
-        <?php foreach ($images as $i => $img): ?>
-          <li>
+        <?php $titleSet = false; foreach ($images as $img):
+          $isPending = $img['status'] === HydrantImages::PROPOSAL;
+          $outdated = $img['veraltet_at'] !== null;
+          $isTitle = !$isPending && !$titleSet;
+          $titleSet = $titleSet || $isTitle;
+          $marker = HydrantImages::markerAttr($img);
+          $imgUrl = 'hydranten/' . (int) $h['id'] . '/bilder/' . (int) $img['id'];
+          ?>
+          <li class="<?= $isPending ? 'is-pending' : '' ?>">
             <img src="<?= e(url('bild/' . (int) $img['id'] . '/thumb')) ?>" alt="" loading="lazy">
             <div class="image-admin-body">
-              <?php if ($i === 0): ?><span class="badge badge-ok">Titelbild</span><?php endif; ?>
-              <form method="post" action="<?= e(url('hydranten/' . (int) $h['id'] . '/bilder/' . (int) $img['id'])) ?>" class="inline-form">
+              <p class="image-badges">
+                <?php if ($isTitle): ?><span class="badge badge-ok">Titelbild</span><?php endif; ?>
+                <?php if ($isPending): ?><span class="badge badge-warn">wartet auf Freigabe</span><?php endif; ?>
+                <?php if ($outdated): ?><span class="badge badge-off">veraltet gemeldet</span><?php endif; ?>
+                <?php if ($marker !== ''): ?><span class="badge">markiert</span><?php endif; ?>
+              </p>
+              <?php if ($isPending): ?>
+                <p class="hint">Vorschlag von <?= e((string) ($img['vorgeschlagen_von'] ?? 'unbekannt')) ?> am <?= e(format_dt($img['created_at'])) ?><?= $img['ersetzt_id'] !== null ? ' – soll ein vorhandenes Bild ersetzen: Nach der Freigabe wird es Titelbild und das ersetzte Bild gilt als veraltet' : '' ?>.</p>
+              <?php elseif ($outdated): ?>
+                <p class="hint">Gemeldet von <?= e((string) ($img['veraltet_von'] ?? '')) ?> am <?= e(format_dt($img['veraltet_at'])) ?>.</p>
+              <?php endif; ?>
+              <form method="post" action="<?= e(url($imgUrl)) ?>" class="inline-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="aktion" value="beschriftung">
                 <label class="sr-only" for="cap<?= (int) $img['id'] ?>">Beschriftung</label>
@@ -157,16 +174,38 @@ $showPos = Settings::bool('show_position');
                 <button type="submit" class="btn btn-secondary btn-sm">Speichern</button>
               </form>
               <div class="actions">
-                <?php if ($i !== 0): ?>
-                  <form method="post" action="<?= e(url('hydranten/' . (int) $h['id'] . '/bilder/' . (int) $img['id'])) ?>">
-                    <?= csrf_field() ?><input type="hidden" name="aktion" value="titelbild">
-                    <button type="submit" class="btn btn-secondary btn-sm">Als Titelbild</button>
+                <?php if ($isPending): ?>
+                  <form method="post" action="<?= e(url($imgUrl)) ?>">
+                    <?= csrf_field() ?><input type="hidden" name="aktion" value="freigeben">
+                    <button type="submit" class="btn btn-primary btn-sm">Freigeben</button>
+                  </form>
+                  <form method="post" action="<?= e(url($imgUrl)) ?>" data-confirm="Diesen Vorschlag ablehnen? Das Bild wird gelöscht.">
+                    <?= csrf_field() ?><input type="hidden" name="aktion" value="ablehnen">
+                    <button type="submit" class="btn btn-danger btn-sm">Ablehnen</button>
+                  </form>
+                <?php else: ?>
+                  <?php if (!$isTitle): ?>
+                    <form method="post" action="<?= e(url($imgUrl)) ?>">
+                      <?= csrf_field() ?><input type="hidden" name="aktion" value="titelbild">
+                      <button type="submit" class="btn btn-secondary btn-sm">Als Titelbild</button>
+                    </form>
+                  <?php endif; ?>
+                  <?php if ($outdated): ?>
+                    <form method="post" action="<?= e(url($imgUrl)) ?>">
+                      <?= csrf_field() ?><input type="hidden" name="aktion" value="veraltet_aufheben">
+                      <button type="submit" class="btn btn-secondary btn-sm">Meldung zurücknehmen</button>
+                    </form>
+                  <?php endif; ?>
+                  <form method="post" action="<?= e(url($imgUrl)) ?>" data-marker-form data-marker-src="<?= e(url('bild/' . (int) $img['id'] . '/full')) ?>">
+                    <?= csrf_field() ?><input type="hidden" name="aktion" value="markierung">
+                    <input type="hidden" name="marker" value="<?= e($marker) ?>">
+                    <button type="button" class="btn btn-secondary btn-sm" data-marker-open><?= $marker !== '' ? 'Markierung ändern' : 'Hydrant markieren' ?></button>
+                  </form>
+                  <form method="post" action="<?= e(url($imgUrl)) ?>" data-confirm="Dieses Bild wirklich entfernen?">
+                    <?= csrf_field() ?><input type="hidden" name="aktion" value="entfernen">
+                    <button type="submit" class="btn btn-danger btn-sm">Entfernen</button>
                   </form>
                 <?php endif; ?>
-                <form method="post" action="<?= e(url('hydranten/' . (int) $h['id'] . '/bilder/' . (int) $img['id'])) ?>" data-confirm="Dieses Bild wirklich entfernen?">
-                  <?= csrf_field() ?><input type="hidden" name="aktion" value="entfernen">
-                  <button type="submit" class="btn btn-danger btn-sm">Entfernen</button>
-                </form>
               </div>
             </div>
           </li>
@@ -178,8 +217,8 @@ $showPos = Settings::bool('show_position');
       <?= csrf_field() ?>
       <div class="form-group">
         <label for="bilder">Bilder hinzufügen</label>
-        <input type="file" id="bilder" name="bilder[]" accept="image/jpeg,image/png,image/webp" multiple data-resize required>
-        <p class="hint">JPEG, PNG oder WebP. Bilder werden vor dem Hochladen verkleinert. Höchstens <?= (int) Hydrant::MAX_IMAGES ?> Bilder pro Hydrant.</p>
+        <input type="file" id="bilder" name="bilder[]" accept="image/jpeg,image/png,image/webp" multiple data-resize data-marker required>
+        <p class="hint">JPEG, PNG oder WebP. Bilder werden vor dem Hochladen verkleinert. Mit „Hydrant markieren“ lässt sich ein gelbes Oval auf den Hydranten setzen. Höchstens <?= (int) Hydrant::MAX_IMAGES ?> Bilder pro Hydrant.</p>
       </div>
       <button type="submit" class="btn btn-primary">Hochladen</button>
     </form>

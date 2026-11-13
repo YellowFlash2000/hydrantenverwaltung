@@ -77,23 +77,14 @@ $showPos = Settings::bool('show_position');
   </div>
 </div>
 
-<div class="card">
-  <h2>Bilder</h2>
-  <?php if (!$images): ?>
-    <p class="hint">Es sind keine Bilder vorhanden.<?= $canEdit ? ' Bilder lassen sich beim Bearbeiten hinzufügen.' : '' ?></p>
-  <?php else: ?>
-    <ul class="gallery">
-      <?php foreach ($images as $img): ?>
-        <li>
-          <a href="<?= e(url('bild/' . (int) $img['id'] . '/full')) ?>" data-lightbox data-caption="<?= e((string) ($img['beschriftung'] ?? '')) ?>">
-            <img src="<?= e(url('bild/' . (int) $img['id'] . '/thumb')) ?>" alt="<?= e((string) ($img['beschriftung'] ?? 'Bild von ' . $h['kennung'])) ?>" loading="lazy">
-          </a>
-          <?php if (($img['beschriftung'] ?? '') !== ''): ?><span class="caption"><?= e((string) $img['beschriftung']) ?></span><?php endif; ?>
-        </li>
-      <?php endforeach; ?>
-    </ul>
-  <?php endif; ?>
-</div>
+<?php
+  $suggest = Auth::hasRole('reviser') && !Auth::hasRole('editor');
+  $isEditor = Auth::hasRole('editor');
+  $imgPrefix = 'bild/';
+  $suggestAction = 'hydranten/' . (int) $h['id'] . '/bilder-vorschlag';
+  $outdatedBase = 'hydranten/' . (int) $h['id'] . '/bilder/';
+  include SRC . '/views/images/_block.php';
+?>
 
 <div class="card" id="pruefung">
   <h2>Prüfung</h2>
@@ -182,8 +173,4 @@ $showPos = Settings::bool('show_position');
 </div>
 <?php endif; ?>
 
-<dialog id="lightbox" class="lightbox" aria-label="Bildansicht">
-  <button type="button" class="lightbox-close" aria-label="Schließen">×</button>
-  <img src="" alt="">
-  <p class="lightbox-caption"></p>
-</dialog>
+<?php include SRC . '/views/images/_lightbox.php'; ?>

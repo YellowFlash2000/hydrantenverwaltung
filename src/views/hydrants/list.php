@@ -14,7 +14,7 @@ $showPos = Settings::bool('show_position');
 $noCoords = count($rows) - count($points);
 $manualDefect = static fn (array $r): bool => $r['camp_all'] === null && $r['ergebnis_all'] === Revision::DEFECT;
 $showCheck = $campaign !== null || $hasManual;
-$filtered = $f['q'] !== '' || $f['typ'] !== '' || $f['lage'] !== '' || $f['status'] !== 'aktiv' || $f['tour'] !== '' || $f['pruef'] !== '';
+$filtered = $f['q'] !== '' || $f['typ'] !== '' || $f['lage'] !== '' || $f['status'] !== 'aktiv' || $f['tour'] !== '' || $f['pruef'] !== '' || $f['bilder'] !== '';
 ?>
 <div class="card-head">
   <h1>Hydranten</h1>
@@ -83,12 +83,31 @@ $filtered = $f['q'] !== '' || $f['typ'] !== '' || $f['lage'] !== '' || $f['statu
         <?php endforeach; ?>
       </select>
     </div>
+    <?php if (Auth::hasRole('editor')): ?>
+    <div class="form-group">
+      <label for="bilder">Bilder</label>
+      <select id="bilder" name="bilder">
+        <option value="">alle</option>
+        <?php foreach (HydrantFilter::bilderOptions() as $k => $label): ?>
+          <option value="<?= e($k) ?>" <?= $f['bilder'] === $k ? 'selected' : '' ?>><?= e($label) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <?php endif; ?>
   </div>
   <div class="actions filter-actions">
     <button type="submit" class="btn btn-primary">Filtern</button>
     <?php if ($filtered): ?><a class="btn btn-secondary" href="<?= e(url('hydranten')) ?>">Zurücksetzen</a><?php endif; ?>
   </div>
 </form>
+
+<?php if (Auth::hasRole('editor') && ($imageOpen['neu'] > 0 || $imageOpen['alt'] > 0)): ?>
+  <p class="alert alert-info">Bilder zu prüfen:
+    <?php if ($imageOpen['neu'] > 0): ?><a href="<?= e(url('hydranten', ['bilder' => 'neu', 'status' => 'alle'])) ?>">Freigabe offen bei <?= (int) $imageOpen['neu'] ?> <?= $imageOpen['neu'] === 1 ? 'Hydrant' : 'Hydranten' ?></a><?php endif; ?>
+    <?php if ($imageOpen['neu'] > 0 && $imageOpen['alt'] > 0): ?> · <?php endif; ?>
+    <?php if ($imageOpen['alt'] > 0): ?><a href="<?= e(url('hydranten', ['bilder' => 'alt', 'status' => 'alle'])) ?>">als veraltet gemeldet bei <?= (int) $imageOpen['alt'] ?> <?= $imageOpen['alt'] === 1 ? 'Hydrant' : 'Hydranten' ?></a><?php endif; ?>
+  </p>
+<?php endif; ?>
 
 <p class="hint result-count">
   <?= count($rows) ?> <?= count($rows) === 1 ? 'Treffer' : 'Treffer' ?> · insgesamt <?= $active ?> aktive<?= $total > $active ? ' und ' . ($total - $active) . ' deaktivierte' : '' ?> Hydranten

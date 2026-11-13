@@ -318,12 +318,12 @@ final class Hydrant
 
     // ---- Bilder ---------------------------------------------------------------
 
-    /** @return array<int, array<string, mixed>> */
-    public static function images(int $hydrantId): array
+    /**
+     * Bilder eines Hydranten, die der Betrachter sehen darf (siehe HydrantImages::visible).
+     * @return array<int, array<string, mixed>>
+     */
+    public static function images(int $hydrantId, bool $all = false, ?int $userId = null, ?int $outingId = null): array
     {
-        return Db::all(
-            'SELECT id, datei, beschriftung, sortierung, created_at FROM {hydrant_images} WHERE hydrant_id = ? ORDER BY sortierung, id',
-            [$hydrantId]
-        );
+        return HydrantImages::visible($hydrantId, $all, $userId, $outingId);
     }
 }

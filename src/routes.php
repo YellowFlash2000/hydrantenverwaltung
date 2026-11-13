@@ -16,6 +16,8 @@ return [
     ['POST', '/hydranten/{id}/aktiv',            [HydrantController::class, 'toggleActive'], 'editor'],
     ['POST', '/hydranten/{id}/bilder',           [HydrantController::class, 'addImages'],   'editor'],
     ['POST', '/hydranten/{id}/bilder/{iid}',     [HydrantController::class, 'imageAction'], 'editor'],
+    ['POST', '/hydranten/{id}/bilder-vorschlag', [HydrantController::class, 'suggestImages'], 'reviser'],
+    ['POST', '/hydranten/{id}/bilder/{iid}/veraltet', [HydrantController::class, 'reportOutdated'], 'reviser'],
     ['POST', '/hydranten/{id}/revision',         [RevisionController::class, 'create'],     'reviser'],
     ['GET',  '/revbild/{id}/{size}',             [RevisionController::class, 'image'],      'viewer'],
     ['GET',  '/bild/{id}/{size}',                [HydrantController::class, 'image'],       'viewer'],
@@ -25,6 +27,8 @@ return [
     ['POST', '/t/{token}',                       [TourLinkController::class, 'names'],      null],
     ['GET',  '/t/{token}/h/{id}',                [TourLinkController::class, 'hydrantPage'], null],
     ['POST', '/t/{token}/h/{id}',                [TourLinkController::class, 'save'],       null],
+    ['POST', '/t/{token}/h/{id}/bilder',         [TourLinkController::class, 'suggestImages'], null],
+    ['POST', '/t/{token}/h/{id}/bilder/{iid}/veraltet', [TourLinkController::class, 'reportOutdated'], null],
     ['GET',  '/t/{token}/bild/{id}/{size}',      [TourLinkController::class, 'image'],      null],
 
     // Anmeldung und Passwort

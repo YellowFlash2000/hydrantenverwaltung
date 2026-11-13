@@ -15,7 +15,7 @@ final class HydrantController extends Controller
         $rows = Db::all(
             'SELECT h.id, h.kennung, h.typ, h.durchmesser_dn, h.durchfluss_lmin, h.durchfluss_zeichen, h.druck_bar, h.position_art, h.lat, h.lon, h.aktiv, h.tour_id,'
             . ' t.name AS tour_name, ct.id AS ct_id, r.ergebnis AS rev_ergebnis, ra.ergebnis_all, ra.camp_all,'
-            . ' (SELECT i.id FROM {hydrant_images} i WHERE i.hydrant_id = h.id ORDER BY i.sortierung, i.id LIMIT 1) AS cover_id'
+            . ' (SELECT i.id FROM {hydrant_images} i WHERE i.hydrant_id = h.id AND i.status = \'ok\' ORDER BY i.sortierung, i.id LIMIT 1) AS cover_id'
             . ' FROM {hydrants} h LEFT JOIN {tours} t ON t.id = h.tour_id'
             . ' LEFT JOIN {campaign_tours} ct ON ct.tour_id = h.tour_id AND ct.campaign_id = ?'
             . ' LEFT JOIN (SELECT r1.hydrant_id, r1.ergebnis FROM {revisions} r1'
@@ -46,6 +46,7 @@ final class HydrantController extends Controller
             'points'  => $points,
             'mapCenter' => Settings::mapDefault(),
             'f'       => $f,
+            'imageOpen' => HydrantImages::openCounts(),
             'tours'   => $tours,
             'campaign' => $campaign,
             'hasManual' => (int) Db::val('SELECT COUNT(*) FROM {revisions} x WHERE x.campaign_id IS NULL AND x.ergebnis = ? AND x.id = (SELECT MAX(y.id) FROM {revisions} y WHERE y.hydrant_id = x.hydrant_id)', [Revision::DEFECT]) > 0,
@@ -80,7 +81,7 @@ final class HydrantController extends Controller
         if ($tourId === false) {
             $errors[] = 'Die gewählte Tour gibt es nicht.';
         }
-        $uploads = $this->collectUploads();
+        $uploads = HydrantImages::collectUploads();
         $errors = array_merge($errors, $uploads['errors']);
         if ($errors) {
             $this->renderForm(null, Hydrant::rawForm($_POST), $errors, 422);
@@ -137,10 +138,10 @@ final class HydrantController extends Controller
             'defectList' => DefectType::forType((string) $h['typ']),
             'revForm' => $revForm,
             'revErrors' => $revErrors,
-            'images'  => Hydrant::images((int) $h['id']),
+            'images'  => Hydrant::images((int) $h['id'], Auth::hasRole('editor'), (int) (Auth::user()['id'] ?? 0) ?: null),
             'others'  => $h['lat'] !== null && $h['lon'] !== null ? Hydrant::otherPoints((int) $h['id']) : [],
             'styles'  => ['vendor/leaflet/leaflet.css'],
-            'scripts' => ['vendor/leaflet/leaflet.js', 'js/map.js', 'js/gallery.js', 'js/upload.js', 'js/revision.js'],
+            'scripts' => ['vendor/leaflet/leaflet.js', 'js/map.js', 'js/gallery.js', 'js/marker.js', 'js/upload.js', 'js/revision.js'],
         ], $status);
     }
 
@@ -166,7 +167,7 @@ final class HydrantController extends Controller
         if ($tourId === false) {
             $errors[] = 'Die gewählte Tour gibt es nicht.';
         }
-        $uploads = $this->collectUploads();
+        $uploads = HydrantImages::collectUploads();
         $errors = array_merge($errors, $uploads['errors']);
         if ($errors) {
             $this->renderForm($h, Hydrant::rawForm($_POST), $errors, 422);
@@ -210,13 +211,14 @@ final class HydrantController extends Controller
 
     // ---- Bilder ---------------------------------------------------------------
 
+    /** Bearbeiter: Bilder direkt hinzufügen (sofort freigegeben, optional mit Markierung). */
     public function addImages(array $params): void
     {
         $h = $this->load($params);
         if ($h === null) {
             return;
         }
-        $uploads = $this->collectUploads();
+        $uploads = HydrantImages::collectUploads();
         if ($uploads['errors']) {
             foreach ($uploads['errors'] as $e) {
                 flash('error', $e);
@@ -224,52 +226,136 @@ final class HydrantController extends Controller
         } elseif (!$uploads['files']) {
             flash('error', 'Bitte mindestens ein Bild auswählen.');
         } else {
-            foreach ($this->storeUploads((int) $h['id'], $uploads['files'], true) as $m) {
+            [$saved, $msgs] = HydrantImages::store((int) $h['id'], $uploads['files'], ['status' => HydrantImages::OK, 'user_id' => Auth::user()['id'] ?? null]);
+            foreach ($msgs as $m) {
                 flash($m[0], $m[1]);
+            }
+            if ($saved > 0) {
+                Audit::log('bilder_hochgeladen', 'hydrant', (int) $h['id'], $saved . ' Bild(er)');
+                flash('success', $saved === 1 ? 'Das Bild wurde gespeichert.' : $saved . ' Bilder wurden gespeichert.');
             }
         }
         redirect('hydranten/' . (int) $h['id'] . '/bearbeiten');
     }
 
-    /** Beschriftung ändern, Titelbild festlegen oder Bild entfernen. */
+    /** Prüfer: Bilder als Vorschlag einreichen; sie erscheinen nach der Freigabe durch einen Bearbeiter. */
+    public function suggestImages(array $params): void
+    {
+        $h = $this->load($params);
+        if ($h === null) {
+            return;
+        }
+        $user = Auth::user();
+        $uploads = HydrantImages::collectUploads(HydrantImages::MAX_PER_SUGGESTION);
+        if ($uploads['errors']) {
+            foreach ($uploads['errors'] as $e) {
+                flash('error', $e);
+            }
+        } elseif (!$uploads['files']) {
+            flash('error', 'Bitte mindestens ein Bild auswählen.');
+        } else {
+            $replace = HydrantImages::replaceTarget((int) $h['id'], $_POST['ersetzt_id'] ?? null);
+            [$saved, $msgs] = HydrantImages::store((int) $h['id'], $uploads['files'], [
+                'status' => HydrantImages::PROPOSAL, 'quelle' => 'app', 'user_id' => $user['id'] ?? null,
+                'von' => (string) ($user['name'] ?? ''), 'ersetzt_id' => $replace,
+            ]);
+            foreach ($msgs as $m) {
+                flash($m[0], $m[1]);
+            }
+            if ($saved > 0) {
+                Audit::log('bild_vorgeschlagen', 'hydrant', (int) $h['id'], $h['kennung'] . ': ' . $saved . ' Bild(er)' . ($replace !== null ? ', als Ersatz für Bild #' . $replace : '') . ' (' . ($user['name'] ?? '') . ')');
+                flash('success', ($saved === 1 ? 'Das Bild wurde' : $saved . ' Bilder wurden') . ' eingereicht. Es erscheint für alle, sobald ein Bearbeiter es freigibt.');
+            }
+        }
+        redirect('hydranten/' . (int) $h['id'] . '#bilder');
+    }
+
+    /** Prüfer: ein freigegebenes Bild als veraltet melden. */
+    public function reportOutdated(array $params): void
+    {
+        $h = $this->load($params);
+        if ($h === null) {
+            return;
+        }
+        $img = Db::one('SELECT ' . 'id, datei, status, veraltet_at FROM {hydrant_images} WHERE id = ? AND hydrant_id = ?', [(int) ($params['iid'] ?? 0), (int) $h['id']]);
+        if ($img === null) {
+            $this->fail(404, 'Nicht gefunden', 'Dieses Bild gibt es nicht.');
+            return;
+        }
+        $by = (string) (Auth::user()['name'] ?? '');
+        if (HydrantImages::reportOutdated($img, $by)) {
+            Audit::log('bild_veraltet_gemeldet', 'hydrant', (int) $h['id'], $h['kennung'] . ': Bild #' . (int) $img['id'] . ' (' . $by . ')');
+            flash('success', 'Danke, das Bild ist als veraltet gemeldet. Ein Bearbeiter entscheidet über das Entfernen.');
+        } else {
+            flash('error', 'Dieses Bild kann nicht als veraltet gemeldet werden.');
+        }
+        redirect('hydranten/' . (int) $h['id'] . '#bilder');
+    }
+
+    /** Bearbeiter: Beschriftung, Titelbild, Entfernen, Freigabe/Ablehnung, Veraltet-Meldung und Markierung. */
     public function imageAction(array $params): void
     {
         $h = $this->load($params);
         if ($h === null) {
             return;
         }
-        $img = Db::one('SELECT id, datei, beschriftung FROM {hydrant_images} WHERE id = ? AND hydrant_id = ?', [(int) ($params['iid'] ?? 0), (int) $h['id']]);
+        $img = Db::one('SELECT ' . 'id, hydrant_id, datei, beschriftung, status, ersetzt_id, veraltet_at FROM {hydrant_images} WHERE id = ? AND hydrant_id = ?', [(int) ($params['iid'] ?? 0), (int) $h['id']]);
         if ($img === null) {
             $this->fail(404, 'Nicht gefunden', 'Dieses Bild gibt es nicht.');
             return;
         }
         $action = $this->post('aktion');
+        $hid = (int) $h['id'];
+        $isProposal = $img['status'] === HydrantImages::PROPOSAL;
         if ($action === 'beschriftung') {
             $text = mb_substr($this->post('beschriftung'), 0, 255);
             Db::exec('UPDATE {hydrant_images} SET beschriftung = ? WHERE id = ?', [$text === '' ? null : $text, (int) $img['id']]);
-            Audit::log('bild_beschriftet', 'hydrant', (int) $h['id'], $text);
+            Audit::log('bild_beschriftet', 'hydrant', $hid, $text);
             flash('success', 'Die Beschriftung wurde gespeichert.');
-        } elseif ($action === 'titelbild') {
-            $min = (int) Db::val('SELECT MIN(sortierung) FROM {hydrant_images} WHERE hydrant_id = ?', [(int) $h['id']]);
+        } elseif ($action === 'titelbild' && !$isProposal) {
+            $min = (int) Db::val('SELECT MIN(sortierung) FROM {hydrant_images} WHERE hydrant_id = ?', [$hid]);
             Db::exec('UPDATE {hydrant_images} SET sortierung = ? WHERE id = ?', [$min - 1, (int) $img['id']]);
-            Audit::log('titelbild_gesetzt', 'hydrant', (int) $h['id'], (string) $img['datei']);
+            Audit::log('titelbild_gesetzt', 'hydrant', $hid, (string) $img['datei']);
             flash('success', 'Das Bild ist jetzt das Titelbild.');
         } elseif ($action === 'entfernen') {
-            Db::exec('DELETE FROM {hydrant_images} WHERE id = ?', [(int) $img['id']]);
-            Images::deletePhoto((string) $img['datei']);
-            Audit::log('bild_entfernt', 'hydrant', (int) $h['id'], (string) $img['datei']);
+            HydrantImages::delete($img);
+            Audit::log('bild_entfernt', 'hydrant', $hid, (string) $img['datei']);
             flash('success', 'Das Bild wurde entfernt.');
+        } elseif ($action === 'freigeben' && $isProposal) {
+            flash('success', HydrantImages::approve($img));
+            Audit::log('bild_freigegeben', 'hydrant', $hid, $h['kennung'] . ': Bild #' . (int) $img['id']);
+        } elseif ($action === 'ablehnen' && $isProposal) {
+            HydrantImages::delete($img);
+            Audit::log('bild_abgelehnt', 'hydrant', $hid, $h['kennung'] . ': Bild #' . (int) $img['id']);
+            flash('success', 'Der Vorschlag wurde abgelehnt und gelöscht.');
+        } elseif ($action === 'veraltet_aufheben' && !$isProposal) {
+            Db::exec('UPDATE {hydrant_images} SET veraltet_at = NULL, veraltet_von = NULL WHERE id = ?', [(int) $img['id']]);
+            Audit::log('bild_veraltet_aufgehoben', 'hydrant', $hid, $h['kennung'] . ': Bild #' . (int) $img['id']);
+            flash('success', 'Die Meldung wurde zurückgenommen.');
+        } elseif ($action === 'markierung') {
+            $raw = $this->post('marker');
+            $m = HydrantImages::parseMarker($raw);
+            if ($raw !== '' && $m === null) {
+                flash('error', 'Die Markierung ist ungültig.');
+            } else {
+                HydrantImages::setMarker((int) $img['id'], $m);
+                Audit::log('bild_markiert', 'hydrant', $hid, $h['kennung'] . ': Bild #' . (int) $img['id'] . ($m === null ? ' (Markierung entfernt)' : ''));
+                flash('success', $m === null ? 'Die Markierung wurde entfernt.' : 'Die Markierung wurde gespeichert.');
+            }
         } else {
             flash('error', 'Unbekannte Aktion.');
         }
-        redirect('hydranten/' . (int) $h['id'] . '/bearbeiten');
+        redirect('hydranten/' . $hid . '/bearbeiten#bilder');
     }
 
     /** Liefert ein Bild nur an angemeldete Benutzer aus. */
     public function image(array $params): void
     {
         $size = (string) ($params['size'] ?? '');
-        $row = Db::one('SELECT datei FROM {hydrant_images} WHERE id = ?', [(int) ($params['id'] ?? 0)]);
+        $row = Db::one('SELECT datei, status, user_id FROM {hydrant_images} WHERE id = ?', [(int) ($params['id'] ?? 0)]);
+        if ($row !== null && !HydrantImages::mayView($row, Auth::hasRole('editor'), (int) (Auth::user()['id'] ?? 0) ?: null, null)) {
+            $row = null;
+        }
         if ($row === null || !in_array($size, ['thumb', 'full'], true)) {
             $this->fail(404, 'Nicht gefunden', 'Dieses Bild gibt es nicht.');
             return;
@@ -314,88 +400,23 @@ final class HydrantController extends Controller
             'h'       => $h,
             'form'    => $form,
             'errors'  => $errors,
-            'images'  => $h === null ? [] : Hydrant::images((int) $h['id']),
+            'images'  => $h === null ? [] : Hydrant::images((int) $h['id'], true),
             'center'  => $center,
             'others'  => Hydrant::otherPoints($h === null ? null : (int) $h['id']),
             'tours'   => Tour::all(),
             'zoom'    => $def !== null ? $def[2] : 16,
             'styles'  => ['vendor/leaflet/leaflet.css'],
-            'scripts' => ['vendor/leaflet/leaflet.js', 'js/map.js', 'js/upload.js'],
+            'scripts' => ['vendor/leaflet/leaflet.js', 'js/map.js', 'js/marker.js', 'js/upload.js'],
         ], $status);
     }
 
-    /**
-     * Hochgeladene Bilder aus $_FILES['bilder'] einsammeln und grob prüfen.
-     * @return array{files: array<int, array{name:string, tmp:string}>, errors: string[]}
-     */
-    private function collectUploads(): array
+    /** Bilder beim Anlegen oder Bearbeiten speichern (freigegeben, mit optionaler Markierung). @return string[] Warnungen */
+    private function storeUploads(int $hydrantId, array $files): array
     {
-        $files = [];
-        $errors = [];
-        $in = $_FILES['bilder'] ?? null;
-        if (!is_array($in) || !is_array($in['name'] ?? null)) {
-            return ['files' => [], 'errors' => []];
-        }
-        foreach ($in['name'] as $i => $name) {
-            $err = (int) ($in['error'][$i] ?? UPLOAD_ERR_NO_FILE);
-            if ($err === UPLOAD_ERR_NO_FILE) {
-                continue;
-            }
-            $label = '„' . mb_substr((string) $name, 0, 60) . '“';
-            if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
-                $errors[] = 'Bild ' . $label . ' ist für den Server zu groß (erlaubt: ' . ini_get('upload_max_filesize') . ').';
-            } elseif ($err !== UPLOAD_ERR_OK) {
-                $errors[] = 'Bild ' . $label . ' konnte nicht hochgeladen werden (Fehlercode ' . $err . ').';
-            } elseif (!is_uploaded_file((string) $in['tmp_name'][$i])) {
-                $errors[] = 'Ungültiger Upload.';
-            } else {
-                $files[] = ['name' => (string) $name, 'tmp' => (string) $in['tmp_name'][$i]];
-            }
-        }
-        if (count($files) > 10) {
-            $errors[] = 'Bitte höchstens 10 Bilder auf einmal hochladen.';
-        }
-        return ['files' => $files, 'errors' => $errors];
-    }
-
-    /**
-     * Verarbeitet und speichert die Bilder eines Hydranten.
-     * @param bool $typed true: Rückgabe als [Art, Text]-Paare, sonst nur Texte (für Warnungen)
-     * @return array<int, mixed>
-     */
-    private function storeUploads(int $hydrantId, array $files, bool $typed = false): array
-    {
-        $out = [];
-        $count = (int) Db::val('SELECT COUNT(*) FROM {hydrant_images} WHERE hydrant_id = ?', [$hydrantId]);
-        $max = (int) Db::val('SELECT MAX(sortierung) FROM {hydrant_images} WHERE hydrant_id = ?', [$hydrantId]);
-        $saved = 0;
-        foreach ($files as $file) {
-            $label = '„' . mb_substr($file['name'], 0, 60) . '“';
-            if ($count >= Hydrant::MAX_IMAGES) {
-                $msg = 'Bild ' . $label . ' wurde nicht gespeichert: Pro Hydrant sind höchstens ' . Hydrant::MAX_IMAGES . ' Bilder möglich.';
-                $out[] = $typed ? ['warning', $msg] : $msg;
-                continue;
-            }
-            [$name, $err] = Images::storePhoto($file['tmp']);
-            if ($name === null) {
-                $msg = 'Bild ' . $label . ': ' . $err;
-                $out[] = $typed ? ['error', $msg] : $msg;
-                continue;
-            }
-            $max++;
-            Db::insert(
-                'INSERT INTO {hydrant_images} (hydrant_id, datei, beschriftung, sortierung, user_id, created_at) VALUES (?, ?, NULL, ?, ?, ?)',
-                [$hydrantId, $name, $max, Auth::user()['id'] ?? null, now()]
-            );
-            $count++;
-            $saved++;
-        }
+        [$saved, $msgs] = HydrantImages::store($hydrantId, $files, ['status' => HydrantImages::OK, 'user_id' => Auth::user()['id'] ?? null]);
         if ($saved > 0) {
             Audit::log('bilder_hochgeladen', 'hydrant', $hydrantId, $saved . ' Bild(er)');
-            if ($typed) {
-                $out[] = ['success', $saved === 1 ? 'Das Bild wurde gespeichert.' : $saved . ' Bilder wurden gespeichert.'];
-            }
         }
-        return $out;
+        return array_map(static fn (array $m): string => $m[1], $msgs);
     }
 }

@@ -8,7 +8,7 @@ declare(strict_types=1);
 final class Migrator
 {
     /** Aktuelle Version des Datenbankschemas. */
-    public const LATEST = 6;
+    public const LATEST = 7;
 
     /** @return ?string Fehlermeldung oder null */
     public static function run(): ?string
@@ -32,6 +32,9 @@ final class Migrator
             }
             if ($current < 6) {
                 self::to6();
+            }
+            if ($current < 7) {
+                self::to7();
             }
             Settings::set('schema_version', (string) self::LATEST);
             Audit::log('datenbank_aktualisiert', 'system', null, 'Schema Version ' . $current . ' → ' . self::LATEST, 'System');
@@ -180,5 +183,28 @@ final class Migrator
         Db::exec("UPDATE {hydrant_types} SET symbol = 'raute' WHERE symbol = 'sechseck'");
         Db::exec("UPDATE {hydrant_types} SET osm_wert = 'pipe' WHERE schluessel = 'saugbrunnen' AND (osm_wert IS NULL OR osm_wert = '')");
         HydrantType::reset();
+    }
+
+    /** Version 7: Bildvorschläge mit Freigabe, Veraltet-Meldung und Markierung am Hydrantenbild. */
+    private static function to7(): void
+    {
+        $cols = [
+            'status'            => "VARCHAR(10) NOT NULL DEFAULT 'ok'",
+            'quelle'            => "VARCHAR(10) NOT NULL DEFAULT 'app'",
+            'outing_id'         => 'INTEGER NULL',
+            'ersetzt_id'        => 'INTEGER NULL',
+            'vorgeschlagen_von' => 'VARCHAR(255) NULL',
+            'veraltet_at'       => 'DATETIME NULL',
+            'veraltet_von'      => 'VARCHAR(255) NULL',
+            'marker_x'          => 'DECIMAL(6,5) NULL',
+            'marker_y'          => 'DECIMAL(6,5) NULL',
+            'marker_rx'         => 'DECIMAL(6,5) NULL',
+            'marker_ry'         => 'DECIMAL(6,5) NULL',
+        ];
+        foreach ($cols as $name => $def) {
+            if (!Db::columnExists('hydrant_images', $name)) {
+                Db::exec('ALTER TABLE {hydrant_images} ADD COLUMN ' . $name . ' ' . $def);
+            }
+        }
     }
 }

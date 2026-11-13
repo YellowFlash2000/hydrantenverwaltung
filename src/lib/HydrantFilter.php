@@ -13,7 +13,7 @@ final class HydrantFilter
         return Campaign::active() === null ? ['mangel' => self::PRUEF['mangel']] : self::PRUEF;
     }
 
-    /** Filter aus einem Parameter-Array (z. B. $_GET oder $_POST) lesen und prüfen. @return array{q:string,typ:string,lage:string,status:string,tour:string,pruef:string} */
+    /** Filter aus einem Parameter-Array (z. B. $_GET oder $_POST) lesen und prüfen. @return array{q:string,typ:string,lage:string,status:string,tour:string,pruef:string,bilder:string} */
     public static function parse(array $src, ?array $tours = null): array
     {
         $get = static function (string $key, string $default = '') use ($src): string {
@@ -27,6 +27,7 @@ final class HydrantFilter
             'status' => $get('status', 'aktiv'),
             'tour'   => $get('tour'),
             'pruef'  => $get('pruef'),
+            'bilder' => $get('bilder'),
         ];
         $tourIds = array_map(static fn ($t) => (string) $t['id'], $tours ?? Tour::all());
         if ($f['tour'] !== 'none' && !in_array($f['tour'], $tourIds, true)) {
@@ -44,7 +45,17 @@ final class HydrantFilter
         if (!isset(self::pruefOptions()[$f['pruef']])) {
             $f['pruef'] = '';
         }
+        // Bilder-Filter (Freigabe offen / als veraltet gemeldet) gibt es nur für Bearbeiter und Admins
+        if (!isset(self::bilderOptions()[$f['bilder']]) || !Auth::hasRole('editor')) {
+            $f['bilder'] = '';
+        }
         return $f;
+    }
+
+    /** Auswahl für den Bilder-Filter. @return array<string, string> */
+    public static function bilderOptions(): array
+    {
+        return ['neu' => 'Freigabe offen', 'alt' => 'als veraltet gemeldet', 'beides' => 'Freigabe offen oder veraltet gemeldet'];
     }
 
     /** @return array{0: string, 1: array<int, mixed>} [" WHERE …" oder "", Parameter] */
@@ -88,6 +99,13 @@ final class HydrantFilter
                 array_push($params, Revision::DEFECT, Revision::OK, Revision::DEFECT);
             }
         }
+        if ($f['bilder'] === 'neu') {
+            $where[] = "EXISTS (SELECT 1 FROM {hydrant_images} bi WHERE bi.hydrant_id = h.id AND bi.status = 'vorschlag')";
+        } elseif ($f['bilder'] === 'alt') {
+            $where[] = "EXISTS (SELECT 1 FROM {hydrant_images} bi WHERE bi.hydrant_id = h.id AND bi.status = 'ok' AND bi.veraltet_at IS NOT NULL)";
+        } elseif ($f['bilder'] === 'beides') {
+            $where[] = "EXISTS (SELECT 1 FROM {hydrant_images} bi WHERE bi.hydrant_id = h.id AND (bi.status = 'vorschlag' OR bi.veraltet_at IS NOT NULL))";
+        }
         if ($f['q'] !== '') {
             // "!" als Escape-Zeichen, damit % und _ in der Suche als normale Zeichen gelten (gleich in MySQL und SQLite).
             $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $f['q']) . '%';
@@ -101,7 +119,7 @@ final class HydrantFilter
     public static function toQuery(array $f): array
     {
         $q = ['status' => $f['status']];
-        foreach (['q', 'typ', 'lage', 'tour', 'pruef'] as $k) {
+        foreach (['q', 'typ', 'lage', 'tour', 'pruef', 'bilder'] as $k) {
             if ($f[$k] !== '') {
                 $q[$k] = $f[$k];
             }
@@ -118,6 +136,9 @@ final class HydrantFilter
         }
         if ($f['lage'] !== '') {
             $parts[] = 'Position „' . HydrantPosition::label($f['lage']) . '“';
+        }
+        if ($f['bilder'] !== '') {
+            $parts[] = 'Bilder: ' . self::bilderOptions()[$f['bilder']];
         }
         if ($f['tour'] === 'none') {
             $parts[] = 'ohne Tour';

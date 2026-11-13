@@ -56,7 +56,7 @@ if (!headers_sent()) {
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Cache-Control: no-store'); // Seiten mit Anmeldung nie zwischenspeichern; Bilder und Farbschema setzen eigene Werte
     header('X-Robots-Tag: noindex, nofollow');
-    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
         . "style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'");
     if (is_https()) {
         header('Strict-Transport-Security: max-age=15552000');

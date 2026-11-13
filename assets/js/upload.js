@@ -36,8 +36,11 @@
     // Handys ersetzen bei jeder neuen Aufnahme die bisherige Auswahl. Darum sammeln wir die Fotos selbst
     // und zeigen sie als Liste, aus der einzelne wieder entfernt werden können.
     var collected = [];
+    var markers = []; // Markierung je Foto ("x,y,rx,ry" oder ''), nur bei data-marker
     var list = null;
+    var markerBox = null;
     var multiple = input.multiple;
+    var wantMarker = input.hasAttribute('data-marker') && !!window.HydMarker;
 
     function ensureList() {
       if (list) { return list; }
@@ -57,23 +60,57 @@
       } catch (e) { /* Originale bleiben ausgewählt */ }
       var ul = ensureList();
       ul.textContent = '';
+      if (wantMarker && input.form) {
+        if (!markerBox) {
+          markerBox = document.createElement('div');
+          markerBox.hidden = true;
+          input.form.appendChild(markerBox);
+        }
+        markerBox.textContent = '';
+        collected.forEach(function (f, i) {
+          var h = document.createElement('input');
+          h.type = 'hidden';
+          h.name = 'marker[' + i + ']';
+          h.value = markers[i] || '';
+          markerBox.appendChild(h);
+        });
+      }
       collected.forEach(function (f, i) {
         var li = document.createElement('li');
         var name = document.createElement('span');
-        name.textContent = 'Foto ' + (i + 1) + ' (' + sizeText(f.size) + ')';
+        name.textContent = 'Foto ' + (i + 1) + ' (' + sizeText(f.size) + ')' + (wantMarker && markers[i] ? ' – Hydrant markiert' : '');
+        var btns = document.createElement('span');
+        btns.className = 'photo-actions';
+        if (wantMarker) {
+          var mk = document.createElement('button');
+          mk.type = 'button';
+          mk.className = 'btn btn-secondary btn-sm';
+          mk.textContent = markers[i] ? 'Markierung ändern' : 'Hydrant markieren';
+          mk.addEventListener('click', function () {
+            var url = URL.createObjectURL(f);
+            window.HydMarker.open(url, markers[i] || '', function (value) {
+              URL.revokeObjectURL(url);
+              if (value === null) { return; }
+              markers[i] = value;
+              sync();
+            });
+          });
+          btns.appendChild(mk);
+        }
         var del = document.createElement('button');
         del.type = 'button';
         del.className = 'btn btn-secondary btn-sm';
         del.textContent = 'Entfernen';
-        del.addEventListener('click', function () { collected.splice(i, 1); sync(); });
+        del.addEventListener('click', function () { collected.splice(i, 1); markers.splice(i, 1); sync(); });
+        btns.appendChild(del);
         li.appendChild(name);
-        li.appendChild(del);
+        li.appendChild(btns);
         ul.appendChild(li);
       });
       ul.hidden = collected.length === 0;
     }
 
-    input.addEventListener('upload-reset', function () { collected = []; sync(); });
+    input.addEventListener('upload-reset', function () { collected = []; markers = []; sync(); });
 
     input.addEventListener('change', function () {
       var files = Array.prototype.slice.call(input.files || []);
@@ -87,8 +124,8 @@
       input.parentNode.appendChild(hint);
 
       Promise.all(files.map(shrink)).then(function (out) {
-        if (!multiple) { collected = []; }
-        out.forEach(function (f) { collected.push(f); });
+        if (!multiple) { collected = []; markers = []; }
+        out.forEach(function (f) { collected.push(f); markers.push(''); });
         sync();
       }).then(function () {
         hint.remove();

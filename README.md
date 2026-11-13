@@ -1,4 +1,4 @@
-# Hydrantenverwaltung – Version 1.1
+# Hydrantenverwaltung – Version 1.2
 
 Webanwendung zur Verwaltung von Löschwasser-Entnahmestellen (Hydranten) einer Feuerwehr: Hydranten mit Karte, Fotos und Stammdaten,
 Touren und jährliche Prüfdurchgänge, Revisionen mit Mängeln (auch ohne Anmeldung über einen geheimen Tour-Link), Mängelübersicht,
@@ -10,6 +10,7 @@ Lizenz: GNU Affero General Public License Version 3 oder später (siehe Abschnit
 - **Touren sind feste Pläne.** Sie bleiben bestehen; ein Prüfdurchgang wählt nur aus, welche Touren geprüft werden.
 - **Stammdaten** (Admin): Hydranten-Typen mit frei wählbarem Symbol, Positionen und Mängelkatalog auf einer Seite.
 - **Kompakte Hydrantenliste** mit Typ-Symbol und Legende statt Bild und ausgeschriebenem Typ. Filter u. a. nach **Prüfstatus** (offen / geprüft / Mangel); „offen“ und „geprüft“ beziehen sich auf den aktiven Durchgang, „Mangel“ findet jeden offenen Mangel. In der Spalte „Prüfung“ erscheint zusätzlich **„Mangel (ohne Durchgang)“**, wenn der neueste Eintrag eines Hydranten ein direkt am Hydranten (außerhalb eines Durchgangs) erfasster Mangel ist; ein neuerer „in Ordnung“-Eintrag behebt ihn. Ebenso behebt ein später ohne Durchgang eingetragener „in Ordnung“-Eintrag einen Mangel des Durchgangs (Spalte zeigt dann „✓ geprüft“, der Filter „Mangel“ findet ihn nicht mehr); die Mängelübersicht zeigt den Mangel des Durchgangs weiterhin. Die Spalte ist auch ohne aktiven Durchgang sichtbar, sobald es solche Mängel gibt.
+- **Bilder aktualisieren bei der Prüfung:** Revisoren und Prüfende am Tour-Link können neue Fotos einreichen und veraltete melden; Bearbeiter geben frei. Der Hydrant lässt sich auf dem Bild mit einem gelben Oval markieren (siehe „Hydranten“).
 - **CSV-Import/-Export** mit Spalte `tour`.
 - **Hydranten aus OpenStreetMap** holen (Admin, Import/Export → „Aus OpenStreetMap holen“).
 - **Protokoll** (Admin): wer wann was getan hat, mit Filtern, CSV und Änderungsverlauf am Hydranten.
@@ -102,6 +103,9 @@ Formate: CSV (Semikolon, OSM-Schlüssel als Spaltenköpfe) oder OSM-XML (neue Kn
   Je Hydrant sind bis zu 20 Bilder möglich, je Upload bis zu 10.
 - **Bilder:** Beschriftung ändern, Titelbild festlegen oder ein Bild entfernen geht beim Bearbeiten.
   Bilder sind nur nach Anmeldung abrufbar.
+- **Markierung auf dem Bild:** Beim Hochladen (und nachträglich beim Bearbeiten) lässt sich der Hydrant mit einem gelben Oval markieren: im Dialog auf den Hydranten tippen oder ziehen und Breite und Höhe mit den Reglern einstellen. Das Bild selbst bleibt unverändert; das Oval wird nur im Vollbild über das Bild gelegt, nicht in den kleinen Vorschaubildern. Nachträglich ändern oder entfernen dürfen es nur Bearbeiter und Admins.
+- **Bilder aktualisieren (Revisoren und Tour-Link):** Im Block „Bilder des Hydranten“ (Detailseite für Revisoren, Hydrantenseite im Tour-Link) können neue Fotos eingereicht werden (bis zu 6 auf einmal, höchstens 20 je Hydrant einschließlich Vorschlägen), optional mit Markierung und mit der Angabe, welches Bild sie ersetzen. Neue Fotos sind **Vorschläge**: Nur der Einreichende (am Tour-Link: dasselbe Gerät) sieht sie mit dem Hinweis „wartet auf Freigabe“, ebenso die Bearbeiter. Veraltete Bilder lassen sich als „veraltet gemeldet“ markieren; sie bleiben sichtbar, bis ein Bearbeiter entscheidet. Am Tour-Link ist beides nur im aktiven Prüfdurchgang bei gültigem Link möglich.
+- **Freigabe (Bearbeiter):** Beim Bearbeiten eines Hydranten stehen Vorschläge mit Absender und Datum und den Knöpfen „Freigeben“ und „Ablehnen“ (löscht das Bild). Ersetzt ein Vorschlag ein Bild, wird er bei der Freigabe Titelbild und das ersetzte Bild gilt als veraltet. Gemeldete Bilder entfernt ein Bearbeiter oder er nimmt die Meldung zurück. In der Hydrantenliste gibt es für Bearbeiter den Filter **„Bilder“** („Freigabe offen“, „als veraltet gemeldet“, beides) und einen Hinweis mit der Zahl der betroffenen Hydranten. Alle Schritte stehen im Protokoll.
 - **Karten:** Kartenkacheln kommen von openstreetmap.org. Dabei erfährt OpenStreetMap die IP-Adresse der Besucher
   und den Kartenausschnitt, nicht aber die Hydrantendaten.
   Der OpenStreetMap-Kachelserver ist für kleine Anwendungen gedacht; bei starker Nutzung
@@ -153,8 +157,8 @@ kann sie jeder aufrufen, der die Adresse kennt.
 | Rolle | Rechte |
 |---|---|
 | Betrachter | Hydranten ansehen, Fortschritt der Touren auf der Startseite |
-| Revisor | zusätzlich Revisionen eingeben (Detailseite des Hydranten) |
-| Bearbeiter | zusätzlich Hydranten anlegen, bearbeiten, deaktivieren, Bilder verwalten sowie Touren und Prüfdurchgänge verwalten |
+| Revisor | zusätzlich Revisionen eingeben und Bilder einreichen oder als veraltet melden (Detailseite des Hydranten) |
+| Bearbeiter | zusätzlich Hydranten anlegen, bearbeiten, deaktivieren, Bilder verwalten und freigeben sowie Touren und Prüfdurchgänge verwalten |
 | Admin | zusätzlich Benutzer, Einstellungen, Import/Export und Protokoll |
 
 Benutzer werden nie gelöscht, nur gesperrt. Ein gesperrter Benutzer wird sofort abgemeldet.
@@ -213,7 +217,7 @@ Gespeichert werden:
 - **Protokoll:** wer wann welche Änderung vorgenommen hat, sowie fehlgeschlagene Anmeldungen (Aufbewahrung einstellbar, siehe „Protokoll“)
 - **Anmeldeversuche:** E-Mail-Adresse und IP-Adresse für die Sperre nach Fehlversuchen, werden nach kurzer Zeit automatisch gelöscht
 - **Prüfungen:** Ergebnis, Mängel, Bemerkungen, Fotos und bei Prüfungen über den Tour-Link der angegebene Name der Teilnehmenden
-- **Hydranten:** Standort, Stammdaten, Fotos
+- **Hydranten:** Standort, Stammdaten, Fotos (bei eingereichten Vorschlägen auch, wer sie eingereicht hat). Bitte Prüfende bitten, keine Personen oder Kennzeichen zu fotografieren; Admins und Bearbeiter können jedes Bild löschen.
 
 Beim Anzeigen der Karte laden die Browser Kacheln von openstreetmap.org; dabei erfährt OpenStreetMap die IP-Adresse der Besucher.
 Die Hydrantendaten selbst werden nicht an Dritte übermittelt, außer wenn Sie sie bewusst für OpenStreetMap exportieren.

@@ -136,6 +136,17 @@ CREATE TABLE {hydrant_images} (
   sortierung INTEGER NOT NULL DEFAULT 0,
   user_id INTEGER NULL,
   created_at DATETIME NOT NULL,
+  status VARCHAR(10) NOT NULL DEFAULT 'ok',
+  quelle VARCHAR(10) NOT NULL DEFAULT 'app',
+  outing_id INTEGER NULL,
+  ersetzt_id INTEGER NULL,
+  vorgeschlagen_von VARCHAR(255) NULL,
+  veraltet_at DATETIME NULL,
+  veraltet_von VARCHAR(255) NULL,
+  marker_x DECIMAL(6,5) NULL,
+  marker_y DECIMAL(6,5) NULL,
+  marker_rx DECIMAL(6,5) NULL,
+  marker_ry DECIMAL(6,5) NULL,
   FOREIGN KEY (hydrant_id) REFERENCES {hydrants} (id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES {users} (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
