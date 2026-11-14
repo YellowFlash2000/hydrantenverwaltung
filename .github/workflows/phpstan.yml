@@ -1,0 +1,29 @@
+name: PHPStan
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  phpstan:
+    name: PHPStan Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2' # Passe dies an deine verwendete PHP-Version an (z.B. 8.1, 8.2 oder 8.3)
+          tools: phpstan/phpstan
+
+      - name: Install dependencies (if composer.json exists)
+        if: hashFiles('composer.json') != ''
+        run: composer install --prefer-dist --no-progress --no-suggest
+
+      - name: Run PHPStan
+        run: phpstan analyse --no-progress
