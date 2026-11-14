@@ -1,4 +1,4 @@
-# Hydrantenverwaltung – Version 1.2
+# Hydrantenverwaltung – Version 1.2.1
 
 Webanwendung zur Verwaltung von Löschwasser-Entnahmestellen (Hydranten) einer Feuerwehr: Hydranten mit Karte, Fotos und Stammdaten,
 Touren und jährliche Prüfdurchgänge, Revisionen mit Mängeln (auch ohne Anmeldung über einen geheimen Tour-Link), Mängelübersicht,

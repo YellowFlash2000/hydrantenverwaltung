@@ -71,6 +71,15 @@
     return L.marker(latlng, { icon: icon, title: opts.title || '', keyboard: true, zIndexOffset: opts.top ? 1000 : 0 }).addTo(map);
   }
 
+  // Nur Adressen derselben Seite (http/https) als Link zulassen, nie javascript: oder data:
+  function safeUrl(u) {
+    try {
+      var parsed = new URL(String(u), window.location.href);
+      return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === window.location.origin
+        ? parsed.href : null;
+    } catch (e) { return null; }
+  }
+
   // Popup mit Kennung, Typ und (optional) Link zur Detailseite
   function popupBox(p, withLink) {
     var box = document.createElement('div');
@@ -87,9 +96,10 @@
       st.textContent = p.status;
       box.appendChild(st);
     }
-    if (withLink) {
+    var href = withLink ? safeUrl(p.url) : null;
+    if (href) {
       var link = document.createElement('a');
-      link.href = p.url;
+      link.href = href;
       link.textContent = p.linkText || 'Details ansehen';
       box.appendChild(link);
     }
