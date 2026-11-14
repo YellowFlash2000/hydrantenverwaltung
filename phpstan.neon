@@ -3,5 +3,5 @@ parameters:
     paths:
         - .
     excludePaths:
-        - vendor/
-        - node_modules/
+        - vendor (?)
+        - node_modules (?)
