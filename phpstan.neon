@@ -3,11 +3,8 @@ parameters:
     paths:
         - .
     excludePaths:
-        analyseAndScan:
-            - vendor (?)
-            - node_modules (?)
+        - src/vendor/*
+        - vendor/*
+        - node_modules/*
     bootstrapFiles:
-        # Falls deine App eine Bootstrap-Datei hat, hier eintragen.
-        # Alternativ definieren wir Konstanten hier direkt oder über ein Stubs-File:
-    stubFiles:
         - phpstan-stubs.php
