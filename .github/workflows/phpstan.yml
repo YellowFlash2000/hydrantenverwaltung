@@ -11,6 +11,10 @@ jobs:
     name: PHPStan Analysis
     runs-on: ubuntu-latest
 
+# Berechtigungen für den Workflow definieren
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
