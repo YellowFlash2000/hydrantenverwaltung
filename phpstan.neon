@@ -1,7 +1,13 @@
 parameters:
-    level: 5
+    level: 2
     paths:
         - .
     excludePaths:
-        - vendor (?)
-        - node_modules (?)
+        analyseAndScan:
+            - vendor (?)
+            - node_modules (?)
+    bootstrapFiles:
+        # Falls deine App eine Bootstrap-Datei hat, hier eintragen.
+        # Alternativ definieren wir Konstanten hier direkt oder über ein Stubs-File:
+    stubFiles:
+        - phpstan-stubs.php
